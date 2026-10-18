@@ -15,10 +15,14 @@
     .player-shell { position: relative; width: min(100vw, 177.7778svh); aspect-ratio: 16 / 9; max-height: 100svh; overflow: hidden; background: #000; }
     #player { position: absolute; inset: 0; width: 100%; height: 100%; }
     #hotspot-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-    .hotspot { position: absolute; display: block; pointer-events: auto; background: transparent; border: 0; outline: none; cursor: pointer; }
-    .hotspot:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+    /* Green outline drawn INSIDE the box (inset shadow) so it never grows past the preview frame.
+       The interior stays fully transparent so the document preview underneath is never covered. */
+    .hotspot { position: absolute; display: block; pointer-events: auto; background: transparent; border: 0; outline: none; cursor: pointer; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--focus); transform-origin: 0 0; }
+    .hotspot:hover { box-shadow: inset 0 0 0 3px var(--focus); }
+    .hotspot:focus-visible { box-shadow: inset 0 0 0 4px var(--focus); }
     .hotspot[hidden] { display: none; }
-    body.debug-hotspots .hotspot { background: rgba(72, 240, 177, .12); outline: 2px solid var(--focus); }
+    /* Press "O" (or load with ?outlines=0) to hide the outlines; the clickable areas stay active. */
+    body.hide-outlines .hotspot, body.hide-outlines .hotspot:hover, body.hide-outlines .hotspot:focus-visible { box-shadow: none; }
     .status { position: fixed; left: 12px; bottom: 12px; z-index: 20; color: #aaa; background: #111d; padding: 6px 9px; border-radius: 6px; font-size: 12px; pointer-events: none; }
     .status:empty { display: none; }
     @media (max-aspect-ratio: 16/9) { .player-shell { width: 100vw; max-height: none; } }
@@ -39,8 +43,11 @@
       const SITE_URL = 'https://vitalgenix-website.vercel.app/';
       const END_CARD_HOLD_AT = 109.05;
       const END_CARD_SEEK_TO = 108.65;
+      // Geometry is in % of the 16:9 video frame. x/y = top-left corner of the preview card, w/h = its edge lengths.
+      // Optional `shear` {x, y} (unitless ratios) tilts the box to follow a preview card that sits at a slight angle,
+      // so the outline hugs the card instead of a larger bounding box. start/end are video seconds.
       const hotspots = [
-        { id: 'indcx-pitch-deck', label: 'Open INDCX pitch deck', start: 36.9, end: 42.85, x: 7.0, y: 58.0, w: 27.2, h: 33.8, url: 'https://drive.google.com/file/d/1a2ZvtKw9oQVgWvZTZkuXYr4Yxnnd10xX/view?usp=sharing' },
+        { id: 'indcx-pitch-deck', label: 'Open INDCX pitch deck', start: 37.3, end: 42.5, x: 8.08, y: 59.73, w: 24.97, h: 30.27, shear: { x: -0.0271, y: 0.0340 }, url: 'https://drive.google.com/file/d/1a2ZvtKw9oQVgWvZTZkuXYr4Yxnnd10xX/view?usp=sharing' },
         { id: 'website-callout', label: 'Open VitalGenix website', start: 47.65, end: 51.1, x: 66.5, y: 71.8, w: 25.0, h: 23.0, url: SITE_URL },
         { id: 'founders-brief', label: "Open Founder's Brief", start: 52.65, end: 60.0, x: 3.0, y: 5.0, w: 16.6, h: 20.3, url: 'https://drive.google.com/file/d/1tSpr1MRQXqQi_ai105GBbV0MCXQxMYsf/view?usp=sharing' },
         { id: 'product-teardown', label: 'Open VitalGenix PDF product teardown', start: 52.65, end: 60.0, x: 3.0, y: 27.2, w: 16.6, h: 20.1, url: 'https://drive.google.com/file/d/1rabmr4TQIwkpbufg06dEe6FJZqO0oEA8/view?usp=sharing' },
@@ -56,7 +63,7 @@
       let lastVideoTime = 0;
 
       const params = new URLSearchParams(location.search);
-      if (params.has('debug')) document.body.classList.add('debug-hotspots');
+      if (params.get('outlines') === '0') document.body.classList.add('hide-outlines');
 
       for (const card of hotspots) {
         const link = document.createElement('a');
@@ -73,6 +80,7 @@
         link.style.top = card.y + '%';
         link.style.width = card.w + '%';
         link.style.height = card.h + '%';
+        if (card.shear) link.style.transform = 'matrix(1,' + card.shear.y + ',' + card.shear.x + ',1,0,0)';
         link.addEventListener('click', () => { status.textContent = 'Opening ' + card.label + ' in a new tab.'; });
         layer.appendChild(link);
         links.set(card.id, link);
@@ -120,7 +128,7 @@
             onReady: function (event) {
               // Requests autoplay; browsers may still require a viewer gesture for audible playback.
               event.target.playVideo();
-              timer = window.setInterval(tick, 200);
+              timer = window.setInterval(tick, 80);
             },
             onStateChange: function (event) {
               if (event.data === YT.PlayerState.PLAYING) status.textContent = '';
@@ -134,11 +142,11 @@
       };
 
       window.addEventListener('keydown', event => {
-        if (event.key && event.key.toLowerCase() === 'd' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.key && event.key.toLowerCase() === 'o' && !event.ctrlKey && !event.metaKey && !event.altKey) {
           const tag = document.activeElement && document.activeElement.tagName;
           if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-          document.body.classList.toggle('debug-hotspots');
-          status.textContent = document.body.classList.contains('debug-hotspots') ? 'Hotspot debug outlines enabled.' : '';
+          document.body.classList.toggle('hide-outlines');
+          status.textContent = document.body.classList.contains('hide-outlines') ? 'Hotspot outlines hidden.' : 'Hotspot outlines shown.';
         }
       });
 
