@@ -43,16 +43,21 @@
       const SITE_URL = 'https://vitalgenix-website.vercel.app/';
       const END_CARD_HOLD_AT = 109.05;
       const END_CARD_SEEK_TO = 108.65;
-      // Geometry is in % of the 16:9 video frame. x/y = top-left corner of the preview card, w/h = its edge lengths.
-      // Optional `shear` {x, y} (unitless ratios) tilts the box to follow a preview card that sits at a slight angle,
-      // so the outline hugs the card instead of a larger bounding box. start/end are video seconds.
+      // Geometry is in % of the 16:9 video frame: x/y = top-left corner of the on-screen element, w/h = its size.
+      // Optional `shear` {x, y} (unitless ratios) tilts the box to follow a card that sits at a slight angle,
+      // so the outline hugs the card instead of a larger bounding box.
+      // start/end are VIDEO SECONDS and cover only the time the element is fully formed on screen:
+      // start = first moment the build-in animation has finished, end = moment before its exit animation begins.
+      // (Measured frame by frame, 0.05-0.1 s steps, from the published video.)
       const hotspots = [
-        { id: 'indcx-pitch-deck', label: 'Open INDCX pitch deck', start: 37.3, end: 42.5, x: 8.08, y: 59.73, w: 24.97, h: 30.27, shear: { x: -0.0271, y: 0.0340 }, url: 'https://drive.google.com/file/d/1a2ZvtKw9oQVgWvZTZkuXYr4Yxnnd10xX/view?usp=sharing' },
-        { id: 'website-callout', label: 'Open VitalGenix website', start: 47.65, end: 51.1, x: 66.5, y: 71.8, w: 25.0, h: 23.0, url: SITE_URL },
-        { id: 'founders-brief', label: "Open Founder's Brief", start: 52.65, end: 60.0, x: 3.0, y: 5.0, w: 16.6, h: 20.3, url: 'https://drive.google.com/file/d/1tSpr1MRQXqQi_ai105GBbV0MCXQxMYsf/view?usp=sharing' },
-        { id: 'product-teardown', label: 'Open VitalGenix PDF product teardown', start: 52.65, end: 60.0, x: 3.0, y: 27.2, w: 16.6, h: 20.1, url: 'https://drive.google.com/file/d/1rabmr4TQIwkpbufg06dEe6FJZqO0oEA8/view?usp=sharing' },
-        { id: 'funnel-case-study', label: 'Open VitalGenix Funnel case study', start: 52.65, end: 60.0, x: 3.0, y: 49.7, w: 16.6, h: 19.4, url: 'https://drive.google.com/file/d/1qx51QseNyYEsS-0xvug9LPk0YJL-I8Pk/view?usp=sharing' },
-        { id: 'website-end-card', label: 'Open VitalGenix website from the closing card', start: 108.3, end: 111.0, x: 35.5, y: 55.0, w: 29.0, h: 22.5, url: SITE_URL }
+        { id: 'indcx-pitch-deck', label: 'Open INDCX pitch deck', start: 37.55, end: 42.35, x: 8.08, y: 59.73, w: 24.97, h: 30.27, shear: { x: -0.0271, y: 0.0340 }, url: 'https://drive.google.com/file/d/1a2ZvtKw9oQVgWvZTZkuXYr4Yxnnd10xX/view?usp=sharing' },
+        { id: 'website-callout', label: 'Open VitalGenix website', start: 48.02, end: 50.68, x: 67.72, y: 74.25, w: 22.96, h: 14.52, url: SITE_URL },
+        { id: 'website-callout-link', label: 'Open VitalGenix website (Open link)', start: 48.07, end: 50.68, x: 75.27, y: 89.73, w: 8.63, h: 3.42, url: SITE_URL },
+        { id: 'founders-brief', label: "Open Founder's Brief", start: 52.72, end: 59.12, x: 3.46, y: 5.62, w: 15.49, h: 19.45, url: 'https://drive.google.com/file/d/1tSpr1MRQXqQi_ai105GBbV0MCXQxMYsf/view?usp=sharing' },
+        { id: 'product-teardown', label: 'Open VitalGenix PDF product teardown', start: 52.92, end: 59.17, x: 3.46, y: 27.81, w: 15.49, h: 19.04, url: 'https://drive.google.com/file/d/1rabmr4TQIwkpbufg06dEe6FJZqO0oEA8/view?usp=sharing' },
+        { id: 'funnel-case-study', label: 'Open VitalGenix Funnel case study', start: 53.12, end: 59.22, x: 3.46, y: 49.86, w: 15.49, h: 19.04, url: 'https://drive.google.com/file/d/1qx51QseNyYEsS-0xvug9LPk0YJL-I8Pk/view?usp=sharing' },
+        { id: 'website-end-card', label: 'Open VitalGenix website from the closing card', start: 108.5, end: 111.0, x: 37.36, y: 56.71, w: 25.35, h: 14.38, url: SITE_URL },
+        { id: 'website-end-card-link', label: 'Open VitalGenix website from the closing card (Open link)', start: 108.58, end: 111.0, x: 46.46, y: 72.19, w: 8.17, h: 3.29, url: SITE_URL }
       ];
       const layer = document.getElementById('hotspot-layer');
       const status = document.getElementById('status');
@@ -96,16 +101,35 @@
         }
       }
 
+      // YouTube only reports its clock every so often, so the page remembers when each new value arrived and
+      // extends it while the video is playing. That keeps the hotspots switching on and off within a few
+      // milliseconds of the animation edges instead of lagging by up to a quarter of a second.
+      let anchorVideo = 0;
+      let anchorWall = 0;
+      let lastReported = null;
+
+      function currentVideoTime() {
+        if (!player || typeof player.getCurrentTime !== 'function') return null;
+        const reported = player.getCurrentTime();
+        if (!Number.isFinite(reported)) return null;
+        const now = performance.now();
+        if (reported !== lastReported) { lastReported = reported; anchorVideo = reported; anchorWall = now; }
+        const playing = typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING;
+        if (!playing) return anchorVideo;
+        const rate = typeof player.getPlaybackRate === 'function' ? (player.getPlaybackRate() || 1) : 1;
+        return anchorVideo + Math.min((now - anchorWall) / 1000, 0.3) * rate;
+      }
+
       function tick() {
-        if (!player || typeof player.getCurrentTime !== 'function') return;
-        const time = player.getCurrentTime();
-        if (!Number.isFinite(time)) return;
+        const time = currentVideoTime();
+        if (time === null) return;
         updateHotspots(time);
         if (time < 107.5) endCardHeld = false;
         if (!endCardHeld && time >= END_CARD_HOLD_AT && lastVideoTime < END_CARD_HOLD_AT) {
           endCardHeld = true;
           player.pauseVideo();
           player.seekTo(END_CARD_SEEK_TO, true);
+          lastReported = null;
           updateHotspots(END_CARD_SEEK_TO);
         }
         lastVideoTime = time;
@@ -128,7 +152,7 @@
             onReady: function (event) {
               // Requests autoplay; browsers may still require a viewer gesture for audible playback.
               event.target.playVideo();
-              timer = window.setInterval(tick, 80);
+              timer = window.setInterval(tick, 25);
             },
             onStateChange: function (event) {
               if (event.data === YT.PlayerState.PLAYING) status.textContent = '';
