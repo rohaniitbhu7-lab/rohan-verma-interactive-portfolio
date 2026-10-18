@@ -1,2 +1,1 @@
-# rohan-verma-interactive-portfolio
-Interactive portfolio featuring a YouTube-hosted introduction video with time-synchronized clickable document and website hotspots.
+Click “Copy README,” then paste it into the GitHub editor and commit your changes.
