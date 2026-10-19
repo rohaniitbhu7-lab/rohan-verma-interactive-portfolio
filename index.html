@@ -7,32 +7,57 @@
   <meta name="description" content="Rohan Verma — interactive portfolio introduction.">
   <title>Rohan Verma — Interactive Portfolio</title>
   <style>
-    :root { color-scheme: dark; --bg: #050505; --focus: #48f0b1; }
+    :root { color-scheme: dark; --bg: #000; --focus: #48f0b1; }
     * { box-sizing: border-box; }
-    html, body { width: 100%; min-height: 100%; margin: 0; background: var(--bg); }
-    body { min-height: 100svh; display: grid; place-items: center; overflow: hidden; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    .stage { width: 100%; min-height: 100svh; display: grid; place-items: center; background: #000; }
-    .player-shell { position: relative; width: min(100vw, 177.7778svh); aspect-ratio: 16 / 9; max-height: 100svh; overflow: hidden; background: #000; }
-    #player { position: absolute; inset: 0; width: 100%; height: 100%; }
-    #hotspot-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+    html, body { width: 100%; height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+    /* The stage is exactly the visible screen area on every browser (fixed + all four edges at 0). */
+    .stage { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+
+    /* The player box must ALWAYS be exactly 16:9, because the hotspot positions are percentages of the video frame.
+       If the box were any other shape, YouTube would add black bars inside it and every hotspot would drift.
+       Script below sets the exact pixel size of the largest 16:9 box that fits the screen; these two rules are a
+       fallback that uses only units every browser understands (vw / vh), in case the script has not run yet. */
+    .player-shell { position: relative; flex: none; width: 100vw; height: 56.25vw; overflow: hidden; background: #000; }
+    @media (min-aspect-ratio: 16/9) { .player-shell { width: 177.7778vh; height: 100vh; } }
+
+    #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+    #hotspot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+
     /* Green outline drawn INSIDE the box (inset shadow) so it never grows past the preview frame.
        The interior stays fully transparent so the document preview underneath is never covered. */
-    .hotspot { position: absolute; display: block; pointer-events: auto; background: transparent; border: 0; outline: none; cursor: pointer; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--focus); transform-origin: 0 0; }
+    .hotspot { position: absolute; display: block; pointer-events: auto; background: transparent; border: 0; outline: none; cursor: pointer; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--focus); transform-origin: 0 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
     .hotspot:hover { box-shadow: inset 0 0 0 3px var(--focus); }
     .hotspot:focus-visible { box-shadow: inset 0 0 0 4px var(--focus); }
     .hotspot[hidden] { display: none; }
     /* Press "O" (or load with ?outlines=0) to hide the outlines; the clickable areas stay active. */
     body.hide-outlines .hotspot, body.hide-outlines .hotspot:hover, body.hide-outlines .hotspot:focus-visible { box-shadow: none; }
-    .status { position: fixed; left: 12px; bottom: 12px; z-index: 20; color: #aaa; background: #111d; padding: 6px 9px; border-radius: 6px; font-size: 12px; pointer-events: none; }
+
+    /* Our own full-screen button. YouTube's full-screen button is switched off because it puts ONLY the YouTube
+       frame into full screen, which leaves the clickable links behind. This one takes the whole page (video + links). */
+    .fs-btn { position: absolute; top: 10px; right: 10px; z-index: 10; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; opacity: .85; transition: opacity .25s; -webkit-tap-highlight-color: transparent; }
+    .fs-btn:hover, .fs-btn:focus-visible { opacity: 1; outline: 2px solid var(--focus); outline-offset: 1px; }
+    .fs-btn svg { width: 22px; height: 22px; }
+    .fs-btn .exit { display: none; }
+    body.is-fullscreen .fs-btn .enter { display: none; }
+    body.is-fullscreen .fs-btn .exit { display: block; }
+    body.ui-idle .fs-btn { opacity: 0; pointer-events: none; }
+    .fs-btn[hidden] { display: none; }
+
+    .status { position: fixed; left: 12px; bottom: 12px; z-index: 20; color: #ddd; background: rgba(17,17,17,.85); padding: 6px 9px; border-radius: 6px; font-size: 12px; pointer-events: none; max-width: calc(100vw - 24px); }
     .status:empty { display: none; }
-    @media (max-aspect-ratio: 16/9) { .player-shell { width: 100vw; max-height: none; } }
   </style>
 </head>
 <body>
-  <main class="stage">
+  <main class="stage" id="stage">
     <div class="player-shell" id="player-shell">
       <div id="player" aria-label="Rohan Verma introduction video"></div>
       <nav id="hotspot-layer" aria-label="Interactive portfolio links"></nav>
+      <button type="button" class="fs-btn" id="fs-btn" aria-label="Full screen" title="Full screen (F)" hidden>
+        <svg class="enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        <svg class="exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+      </button>
     </div>
   </main>
   <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -59,23 +84,86 @@
         { id: 'website-end-card', label: 'Open VitalGenix website from the closing card', start: 108.5, end: 111.0, x: 37.36, y: 56.71, w: 25.35, h: 14.38, url: SITE_URL },
         { id: 'website-end-card-link', label: 'Open VitalGenix website from the closing card (Open link)', start: 108.58, end: 111.0, x: 46.46, y: 72.19, w: 8.17, h: 3.29, url: SITE_URL }
       ];
+      const stage = document.getElementById('stage');
+      const shell = document.getElementById('player-shell');
       const layer = document.getElementById('hotspot-layer');
       const status = document.getElementById('status');
+      const fsBtn = document.getElementById('fs-btn');
       const links = new Map();
       let player = null;
       let timer = null;
       let endCardHeld = false;
       let lastVideoTime = 0;
+      let statusTimer = null;
 
       const params = new URLSearchParams(location.search);
       if (params.get('outlines') === '0') document.body.classList.add('hide-outlines');
+      // ?t=SECONDS resumes the video where the viewer left it (used when a link had to open in the same tab).
+      const resumeAt = Number.parseFloat(params.get('t'));
+      const hasResume = Number.isFinite(resumeAt) && resumeAt > 0;
+
+      function say(text, ms) {
+        status.textContent = text;
+        if (statusTimer) clearTimeout(statusTimer);
+        statusTimer = ms ? setTimeout(() => { status.textContent = ''; statusTimer = null; }, ms) : null;
+      }
+
+      // ---------- 1. Exact 16:9 box on every screen shape ----------
+      // Measures the real visible area (works with phone toolbars, rotation, browser zoom, full screen,
+      // ultra-wide and 4:3 projectors) and sizes the player to the largest 16:9 box that fits inside it.
+      function fit() {
+        const vw = stage.clientWidth;
+        const vh = stage.clientHeight;
+        if (!vw || !vh) return;
+        let w = Math.min(vw, vh * 16 / 9);
+        let h = w * 9 / 16;
+        w = Math.floor(w); h = Math.round(w * 9 / 16);
+        if (h > vh) { h = Math.floor(vh); w = Math.round(h * 16 / 9); }
+        shell.style.width = w + 'px';
+        shell.style.height = h + 'px';
+      }
+      let fitQueued = false;
+      function queueFit() {
+        if (fitQueued) return;
+        fitQueued = true;
+        requestAnimationFrame(() => { fitQueued = false; fit(); });
+      }
+      fit();
+      window.addEventListener('resize', queueFit);
+      window.addEventListener('orientationchange', () => { queueFit(); setTimeout(fit, 300); });
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', queueFit);
+      if ('ResizeObserver' in window) new ResizeObserver(queueFit).observe(stage);
+
+      // ---------- 2. Links that open on every device and app ----------
+      function openLink(card, event) {
+        // Let the browser handle Ctrl/Cmd/Shift/middle clicks itself (open in new tab/window as the viewer chose).
+        if (event.defaultPrevented || event.button > 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        const t = currentVideoTime();
+        try { if (player && player.pauseVideo) player.pauseVideo(); } catch (e) { /* ignore */ }
+        let win = null;
+        try { win = window.open(card.url, '_blank'); } catch (e) { win = null; }
+        if (win) {
+          try { win.opener = null; } catch (e) { /* ignore */ }
+          say('Opened ' + card.label.replace(/^Open /, '') + ' in a new tab. The video is paused here.', 5000);
+          return;
+        }
+        // Some in-app browsers (LinkedIn, Instagram, WhatsApp, Gmail on phones) block new tabs.
+        // Then open the page in this tab, and remember the video position so "Back" resumes from the same moment.
+        try {
+          const u = new URL(location.href);
+          if (t !== null) u.searchParams.set('t', t.toFixed(1)); else u.searchParams.delete('t');
+          history.replaceState(null, '', u.toString());
+        } catch (e) { /* ignore */ }
+        location.href = card.url;
+      }
 
       for (const card of hotspots) {
         const link = document.createElement('a');
         link.className = 'hotspot';
         link.href = card.url;
         link.target = '_blank';
-        link.rel = 'noopener noreferrer';
+        link.rel = 'noopener';
         link.title = card.label;
         link.setAttribute('aria-label', card.label);
         link.dataset.hotspotId = card.id;
@@ -86,7 +174,7 @@
         link.style.width = card.w + '%';
         link.style.height = card.h + '%';
         if (card.shear) link.style.transform = 'matrix(1,' + card.shear.y + ',' + card.shear.x + ',1,0,0)';
-        link.addEventListener('click', () => { status.textContent = 'Opening ' + card.label + ' in a new tab.'; });
+        link.addEventListener('click', event => openLink(card, event));
         layer.appendChild(link);
         links.set(card.id, link);
       }
@@ -95,12 +183,14 @@
         for (const card of hotspots) {
           const link = links.get(card.id);
           const active = time >= card.start && time < card.end;
+          if (link.hidden === !active) continue;
           link.hidden = !active;
           link.tabIndex = active ? 0 : -1;
           link.setAttribute('aria-hidden', String(!active));
         }
       }
 
+      // ---------- 3. Video clock ----------
       // YouTube only reports its clock every so often, so the page remembers when each new value arrived and
       // extends it while the video is playing. That keeps the hotspots switching on and off within a few
       // milliseconds of the animation edges instead of lagging by up to a quarter of a second.
@@ -109,15 +199,19 @@
       let lastReported = null;
 
       function currentVideoTime() {
-        if (!player || typeof player.getCurrentTime !== 'function') return null;
-        const reported = player.getCurrentTime();
-        if (!Number.isFinite(reported)) return null;
-        const now = performance.now();
-        if (reported !== lastReported) { lastReported = reported; anchorVideo = reported; anchorWall = now; }
-        const playing = typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING;
-        if (!playing) return anchorVideo;
-        const rate = typeof player.getPlaybackRate === 'function' ? (player.getPlaybackRate() || 1) : 1;
-        return anchorVideo + Math.min((now - anchorWall) / 1000, 0.3) * rate;
+        try {
+          if (!player || typeof player.getCurrentTime !== 'function') return null;
+          const reported = player.getCurrentTime();
+          if (!Number.isFinite(reported)) return null;
+          const now = performance.now();
+          if (reported !== lastReported) { lastReported = reported; anchorVideo = reported; anchorWall = now; }
+          const playing = typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING;
+          if (!playing) return anchorVideo;
+          const rate = typeof player.getPlaybackRate === 'function' ? (player.getPlaybackRate() || 1) : 1;
+          return anchorVideo + Math.min((now - anchorWall) / 1000, 0.3) * rate;
+        } catch (e) {
+          return null;
+        }
       }
 
       function tick() {
@@ -136,47 +230,99 @@
       }
 
       window.onYouTubeIframeAPIReady = function () {
+        const vars = {
+          autoplay: 1,
+          controls: 1,
+          fs: 0,              // YouTube's own full screen would hide the links; our button (top right) is used instead
+          iv_load_policy: 3,
+          playsinline: 1,     // iPhone: play inside the page, never in the system player that hides the links
+          rel: 0,
+          enablejsapi: 1,
+          origin: location.origin
+        };
+        if (hasResume) vars.start = Math.floor(resumeAt);
         player = new YT.Player('player', {
           videoId: VIDEO_ID,
           width: '100%',
           height: '100%',
-          playerVars: {
-            autoplay: 1,
-            controls: 1,
-            playsinline: 1,
-            rel: 0,
-            enablejsapi: 1,
-            origin: location.origin
-          },
+          playerVars: vars,
           events: {
             onReady: function (event) {
+              fit();
+              if (hasResume) {
+                event.target.seekTo(resumeAt, true);
+                try { const u = new URL(location.href); u.searchParams.delete('t'); history.replaceState(null, '', u.toString()); } catch (e) { /* ignore */ }
+              }
               // Requests autoplay; browsers may still require a viewer gesture for audible playback.
               event.target.playVideo();
               timer = window.setInterval(tick, 25);
             },
             onStateChange: function (event) {
-              if (event.data === YT.PlayerState.PLAYING) status.textContent = '';
+              if (event.data === YT.PlayerState.PLAYING && !statusTimer) status.textContent = '';
               if (event.data === YT.PlayerState.ENDED) updateHotspots(110);
             },
             onError: function (event) {
-              status.textContent = 'The embedded video could not load (YouTube error ' + event.data + '). Check that the video is Unlisted and embedding is allowed.';
+              say('The embedded video could not load (YouTube error ' + event.data + '). Check that the video is Unlisted and embedding is allowed.');
             }
           }
         });
       };
 
+      // ---------- 4. Full screen that keeps the links ----------
+      const root = document.documentElement;
+      const requestFs = root.requestFullscreen || root.webkitRequestFullscreen;
+      const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+      const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+      if (requestFs && exitFs) fsBtn.hidden = false; // iPhone Safari has no page full screen; the page already fills the screen there
+
+      function toggleFullscreen() {
+        try {
+          const p = fsElement() ? exitFs.call(document) : requestFs.call(root);
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (e) { /* ignore */ }
+      }
+      function onFsChange() {
+        const on = !!fsElement();
+        document.body.classList.toggle('is-fullscreen', on);
+        fsBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+        fsBtn.title = on ? 'Exit full screen (F)' : 'Full screen (F)';
+        fit();
+        setTimeout(fit, 250);
+      }
+      fsBtn.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', onFsChange);
+      document.addEventListener('webkitfullscreenchange', onFsChange);
+
+      // Hide the full-screen button when the pointer is still, like normal video controls.
+      let idleTimer = null;
+      function wake() {
+        document.body.classList.remove('ui-idle');
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => document.body.classList.add('ui-idle'), 3000);
+      }
+      ['pointermove', 'pointerdown', 'touchstart', 'keydown'].forEach(type => window.addEventListener(type, wake, { passive: true }));
+      wake();
+
       window.addEventListener('keydown', event => {
-        if (event.key && event.key.toLowerCase() === 'o' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          const tag = document.activeElement && document.activeElement.tagName;
-          if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (!event.key || event.ctrlKey || event.metaKey || event.altKey) return;
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        const key = event.key.toLowerCase();
+        if (key === 'o') {
           document.body.classList.toggle('hide-outlines');
-          status.textContent = document.body.classList.contains('hide-outlines') ? 'Hotspot outlines hidden.' : 'Hotspot outlines shown.';
+          say(document.body.classList.contains('hide-outlines') ? 'Hotspot outlines hidden.' : 'Hotspot outlines shown.', 2500);
+        } else if (key === 'f' && !fsBtn.hidden) {
+          toggleFullscreen();
         }
       });
 
+      // When the viewer comes back with the browser's Back button, the page may be restored from memory:
+      // re-measure the screen so the box is right even if the window changed size meanwhile.
+      window.addEventListener('pageshow', () => fit());
+
       const api = document.createElement('script');
       api.src = 'https://www.youtube.com/iframe_api';
-      api.onerror = () => { status.textContent = 'Could not load YouTube player API. Check your internet connection.'; };
+      api.onerror = () => { say('Could not load YouTube player API. Check your internet connection.'); };
       document.head.appendChild(api);
       window.addEventListener('beforeunload', () => { if (timer) window.clearInterval(timer); });
     })();
